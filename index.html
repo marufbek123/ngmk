@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Private File Cloud</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; background: #f3f4f6; padding: 20px; }
+    .box { max-width: 400px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; }
+    input, button { width: 100%; margin-top: 10px; padding: 10px; }
+    ul { padding: 0; }
+    li { list-style: none; display: flex; justify-content: space-between; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="box" id="loginBox">
+  <h3>Login</h3>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button id="loginBtn">Login</button>
+</div>
+
+<div class="box" id="appBox" style="display:none">
+  <h3>My Files</h3>
+  <input type="file" id="fileInput">
+  <button id="uploadBtn">Upload</button>
+  <ul id="fileList"></ul>
+  <button id="logoutBtn">Logout</button>
+</div>
+
+<!-- ES Module import for Supabase -->
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+  // ✅ Supabase client
+  const supabase = createClient(
+    "https://euznpgmslndeejjmbkhf.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1em5wZ21zbG5kZWVqam1ia2hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNDMwMjcsImV4cCI6MjA4MTgxOTAyN30.Ho_pTOkV-YgDlFQPT1xT_MRLNvW5dU7vZDF5B1IM1F8"
+  );
+
+  const loginBtn = document.getElementById("loginBtn");
+  const uploadBtn = document.getElementById("uploadBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  const loginBox = document.getElementById("loginBox");
+  const appBox = document.getElementById("appBox");
+  const fileInput = document.getElementById("fileInput");
+  const fileList = document.getElementById("fileList");
+
+  // ✅ Login function
+  async function login() {
+    const emailVal = document.getElementById("email").value;
+    const passwordVal = document.getElementById("password").value;
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailVal,
+      password: passwordVal
+    });
+
+    if (error) alert(error.message);
+    else loadFiles();
+  }
+
+  // ✅ Load files from bucket
+  async function loadFiles() {
+    loginBox.style.display = "none";
+    appBox.style.display = "block";
+
+    const { data, error } = await supabase.storage.from("kombinat").list();
+
+    if (error) { alert(error.message); return; }
+
+    fileList.innerHTML = "";
+    data.forEach(f => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        ${f.name} 
+        <a href="#" class="downloadLink" data-name="${f.name}">⬇</a>
+      `;
+      fileList.appendChild(li);
+    });
+
+    // Add download listeners
+    document.querySelectorAll(".downloadLink").forEach(link => {
+      link.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const name = link.getAttribute("data-name");
+        const { data, error } = await supabase.storage.from("kombinat").createSignedUrl(name, 60);
+        if (!error) window.open(data.signedUrl);
+      });
+    });
+  }
+
+  // ✅ Upload file
+  async function uploadFile() {
+    const file = fileInput.files[0];
+    if (!file) return alert("Fayl tanlanmadi");
+
+    const { error } = await supabase.storage.from("kombinat").upload(Date.now() + "_" + file.name, file);
+    if (error) alert(error.message);
+    else loadFiles();
+  }
+
+  // ✅ Logout
+  async function logout() {
+    await supabase.auth.signOut();
+    location.reload();
+  }
+
+  // ✅ Add event listeners
+  loginBtn.addEventListener("click", login);
+  uploadBtn.addEventListener("click", uploadFile);
+  logoutBtn.addEventListener("click", logout);
+
+  // ✅ Check session on page load
+  supabase.auth.getSession().then(({ data }) => {
+    if (data.session) loadFiles();
+  });
+
+</script>
+
+</body>
+</html>
